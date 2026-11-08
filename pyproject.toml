@@ -1,0 +1,79 @@
+[project]
+name = "biome-bifurcations"
+version = "0.1.0"
+description = "A minimal water-grass-tree-fire model of tropical biomes from desert to forest along rainfall"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Devansh Lodha", email = "devanshlodha12@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "contourpy>=1.4.0",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.4",
+    "scipy>=1.18.1",
+]
+
+[project.scripts]
+biome = "biome_bifurcations.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.170.15",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.4",
+    "ty>=0.0.99",
+]
+
+[tool.uv]
+cache-dir = "cache/uv"
+
+[tool.ruff]
+line-length = 100
+cache-dir = "cache/ruff"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "COM812",  # trailing commas: conflicts with the formatter
+    "ISC001",  # implicit string concatenation: conflicts with the formatter
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",    # assert is how pytest checks results
+    "INP001",  # tests are a plain directory, not a package
+    "PLR2004", # expected values in tests are clearest written inline
+]
+
+[tool.ty.rules]
+all = "error"
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.pytest]
+testpaths = ["tests"]
+strict = true
+cache_dir = "cache/pytest"
+addopts = ["-ra", "--cov", "--cov-report=term-missing"]
+
+[tool.coverage.run]
+branch = true
+data_file = "cache/coverage/data"
+concurrency = ["multiprocessing"]
+source = ["biome_bifurcations"]
+
+[tool.coverage.report]
+fail_under = 95
+skip_covered = true
