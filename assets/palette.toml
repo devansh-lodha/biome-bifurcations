@@ -1,0 +1,46 @@
+# The figure palette: one fixed meaning per color in every figure, diagram, equation, and slide.
+# Locked by the author on 2026-11-08 and refreshed at their request on 2026-11-13 (a flame
+# red-orange for fire, and washes strong enough to fill a pill on white); tests/test_palette.py
+# fails on any change.
+#
+# Each meaning has three shades:
+#   wash  pale tint for areas (pills, regions, boxes); recedes behind everything
+#   mark  lines and points; the four marks below stay distinct in every pair for protan and deutan
+#         readers (OKLab difference >= 8) and for full color vision (>= 15), and reach 3:1 on paper
+#   ink   text and math in that meaning's color; at least 4.5:1 on paper and on its own wash
+#
+# Bare soil is a wash only. Its mark cannot be told apart from trees by protan readers, so it
+# appears as a line only with a direct label.
+
+[water]
+wash = "#e3f0fe"
+mark = "#4790d8"
+ink = "#16558c"
+
+[grass]
+wash = "#f0f4ce"
+mark = "#959a17"
+ink = "#575a04"
+
+[trees]
+wash = "#d8f7ec"
+mark = "#088871"
+ink = "#015e4a"
+
+[fire]
+wash = "#feeadf"
+mark = "#c43008"
+ink = "#962905"
+
+[soil]
+wash = "#fbecdb"
+mark = "#987a59"
+ink = "#60472f"
+
+[neutral]
+text = "#2b2a28"      # body text, values
+label = "#5f5e5a"     # axis labels, tick labels, direct labels
+axis = "#8c8a85"      # axis lines and ticks
+data = "#b9b6ae"      # field observations, always behind the model
+hairline = "#d9d7d0"  # rare guide lines and dividers
+paper = "#ffffff"

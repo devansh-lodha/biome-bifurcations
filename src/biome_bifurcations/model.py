@@ -3,14 +3,17 @@
 
 """Model equations: surface water O, soil water w, grass G, trees T.
 
-Every term follows from one physical fact:
+Every term follows from one physical fact. The facts come in the order the model is built:
+water and grass (1-3), then trees (4-5), then fire (6), then space (7).
 
-1. Rain lands on the surface. It soaks in at rate I; the rest runs off or evaporates (rate 1).
+1. Rain lands on the surface. It soaks in at rate I, or is lost (rate 1): it evaporates or runs
+   off to streams.
 2. Plants open crusted soil, so infiltration rises with plant cover: I = eps + beta (G + T).
-3. A fraction theta of soaked-in water drains below grass roots; only trees reach it.
-4. Soil dries at a rate set by sunlight reaching the ground, L = exp(-k T) (Beer-Lambert law).
-5. Plants grow in proportion to the water they use. Light caps how much grass there can be
-   (1 - G / L); tree seedlings need light (x L).
+3. Plants grow in proportion to the water they use (u per unit biomass), up to what light
+   allows (1 - G / L for grass), and die at a steady rate. Soil water dries in the sun (rate L).
+4. A fraction theta of soaked-in water drains below grass roots; only trees reach it (d).
+5. Tree crowns shade the ground, L = exp(-k T) (Beer-Lambert law): soil dries more slowly, the
+   light cap on grass falls (1 - G / L), and tree seedlings need light (x L).
 6. Fire spreads only through connected grass fuel, F(G), and blocks a fraction h of tree
    recruitment.
 7. Water spreads fast over the surface; plants spread slowly by seed (`spreading`).
@@ -60,8 +63,8 @@ class Params:
     browse: float = 0.0  # extra tree loss from browsing or wood harvest, relative to natural loss
     # Mechanism switches: each fact can be removed to test what it causes.
     infiltration_feedback: bool = True  # fact 2: plants open the soil
-    shade_evaporation: bool = True  # fact 4: shade slows drying
-    shade_light: bool = True  # fact 5: light caps grass
+    shade_evaporation: bool = True  # fact 5: shade slows drying
+    shade_light: bool = True  # fact 5: shade caps grass
     seedling_light: bool = True  # fact 5: tree seedlings need light
     fire: bool = True  # fact 6: fire spreads through grass
     fixed_cover: float = 0.5  # plant cover assumed when the infiltration feedback is off

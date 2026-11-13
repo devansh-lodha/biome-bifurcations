@@ -19,6 +19,7 @@ from biome_bifurcations.data import (
     fit_rainfall_scale,
     load_sites,
     pinball,
+    spread,
 )
 from biome_bifurcations.model import Params
 
@@ -38,6 +39,14 @@ def test_sites_load_and_ceiling_levels_off(sites: Sites) -> None:
     fit = fit_ceiling(sites)
     assert 600.0 <= fit.knee <= 1000.0
     assert 0.7 <= fit(np.array([2000.0]))[0] <= 0.9
+
+
+def test_spread_spans_the_sites_near_one_rainfall(sites: Sites) -> None:
+    """The spread at a rainfall runs from the barest to the most wooded nearby site."""
+    low, high = spread(sites, 800.0)
+    near = sites.woody[np.abs(sites.rain - 800.0) <= 25.0]
+    assert (low, high) == (near.min(), near.max())
+    assert 0.0 <= low < high <= 1.0
 
 
 def test_altered_data_file_is_refused(tmp_path: Path) -> None:

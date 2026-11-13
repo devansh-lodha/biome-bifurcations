@@ -41,8 +41,9 @@ if TYPE_CHECKING:
 
     from biome_bifurcations.model import Scalar
 
-# Search grids. Light caps grass below 1; self-shaded trees can exceed 1.
-G_GRID = np.unique(np.concatenate([np.geomspace(1e-5, 0.02, 40), np.linspace(0.02, 0.999, 400)]))
+# Search grids. Light caps grass below 1; self-shaded trees can exceed 1. The grids reach down to
+# 1e-9 because where one plant starts to invade the other, it is stable while still that sparse.
+G_GRID = np.unique(np.concatenate([np.geomspace(1e-9, 0.02, 80), np.linspace(0.02, 0.999, 400)]))
 T_GRID = np.unique(np.concatenate([G_GRID, np.linspace(1.0, 8.0, 120)]))
 
 # Tolerances. Roots are refined to near machine precision; the looser values below only tell
@@ -100,13 +101,13 @@ def _roots(f: Callable[[Array], Scalar], grid: Array) -> list[float]:
     return [float(brentq(scalar_f, grid[i], grid[i + 1], xtol=ROOT_TOL)) for i in brackets]
 
 
-def _state(w: float, g: float, t: float, p: float, prm: Params) -> State:
-    """Steady state with its stability, from soil water, grass, and trees."""
-    y = full_state(w, g, t, p, prm)
+def state_at(g: float, t: float, p: float, prm: Params) -> State:
+    """The steady state with grass g and trees t at rainfall p, and its stability."""
+    y = full_state(float(soil_water(g, t, p, prm)), g, t, p, prm)
     return State(
         p=p,
         o=float(y[0]),
-        w=w,
+        w=float(y[1]),
         g=g,
         t=t,
         growth=float(np.linalg.eigvals(jacobian(y, p, prm)).real.max()),
@@ -156,7 +157,7 @@ def steady_states(p: float, prm: Params) -> list[State]:
             new = not any(abs(g - a) < SAME_STATE and abs(t - b) < SAME_STATE for a, b in found)
             if g > PRESENT and PRESENT < t < T_GRID[-1] and new:
                 found.append((g, t))
-    return [_state(float(soil_water(g, t, p, prm)), g, t, p, prm) for g, t in found]
+    return [state_at(g, t, p, prm) for g, t in found]
 
 
 def stable_states(p: float, prm: Params) -> list[State]:
@@ -164,15 +165,20 @@ def stable_states(p: float, prm: Params) -> list[State]:
     return [s for s in steady_states(p, prm) if s.stable]
 
 
-def bare_soil_threshold(prm: Params) -> float:
-    """Rainfall above which bare soil is unstable, because some plant can grow there from rare.
+def break_even(
+    balance: Callable[[Scalar, Scalar, float, Params], Scalar], g: Scalar, t: Scalar, prm: Params
+) -> Scalar:
+    """Rainfall at which a plant's balance is zero with grass g and trees t held fixed.
 
-    On bare soil every water store is proportional to rainfall, so each plant's balance b is
-    linear in p and turns positive at p = -b(0) / (b(1) - b(0)).
+    Water is linear in rainfall: rain is its only source and every water flux is proportional to
+    water. So at fixed vegetation each balance is affine in p and is zero at
+    p = -b(0) / (b(1) - b(0)). Only positive values are rainfalls.
     """
+    at_0, at_1 = balance(g, t, 0.0, prm), balance(g, t, 1.0, prm)
+    return -at_0 / (at_1 - at_0)
 
-    def threshold(balance: Callable[[float, float, float, Params], Scalar]) -> float:
-        at_0, at_1 = float(balance(0.0, 0.0, 0.0, prm)), float(balance(0.0, 0.0, 1.0, prm))
-        return -at_0 / (at_1 - at_0)
 
-    return min(threshold(grass_balance), threshold(tree_balance))
+def bare_soil_threshold(prm: Params) -> float:
+    """Rainfall above which bare soil is unstable, because some plant can grow there from rare."""
+    grass, trees = (break_even(b, 0.0, 0.0, prm) for b in (grass_balance, tree_balance))
+    return float(min(grass, trees))

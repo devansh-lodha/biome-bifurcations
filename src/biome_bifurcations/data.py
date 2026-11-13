@@ -12,16 +12,22 @@ uncertainty.
 import csv
 import hashlib
 from dataclasses import dataclass
+from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy import sparse
 from scipy.optimize import linprog
 
+from biome_bifurcations.parallel import parallel_map
+
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Callable
 
     from biome_bifurcations.model import Array
+
+DATA = Path(__file__).resolve().parents[2] / "data" / "woody_cover_20070206.csv"
 
 KNEES = np.arange(150.0, 1101.0, 25.0)  # candidate knees (mm/yr) of the ceiling
 QUANTILE = 0.99  # the ceiling is this quantile of tree cover
@@ -72,6 +78,12 @@ def load_sites(path: Path) -> Sites:
     return Sites(rain, woody)
 
 
+def spread(sites: Sites, rain_mm: float, half_width: float = 25.0) -> tuple[float, float]:
+    """Least and most tree cover (fractions) among sites within half_width mm/yr of a rainfall."""
+    near = np.abs(sites.rain - rain_mm) <= half_width
+    return float(sites.woody[near].min()), float(sites.woody[near].max())
+
+
 def pinball(residual: Array, q: float) -> float:
     """Mean quantile (pinball) loss; minimized by the q-th quantile."""
     return float(np.mean(np.maximum(q * residual, (q - 1.0) * residual)))
@@ -102,9 +114,23 @@ def ceiling_band(
 ) -> tuple[Array, Array, list[CeilingFit]]:
     """5th and 95th percentile of the bootstrapped ceiling on a rainfall grid, plus the fits."""
     rng = np.random.default_rng(seed)
-    fits = [fit_ceiling(sites.resample(rng), q) for _ in range(n_boot)]
+    samples = [sites.resample(rng) for _ in range(n_boot)]  # drawn in order, so seeded
+    fits = parallel_map(partial(fit_ceiling, q=q), samples)
     curves = np.array([f(grid) for f in fits])
     return np.percentile(curves, 5, axis=0), np.percentile(curves, 95, axis=0), fits
+
+
+def _scale_loss(
+    p_grid: Array, model_ceiling: Array, sites: Sites, q: float
+) -> Callable[[float], float]:
+    """Pinball loss of the sites under the model ceiling, as a function of log S."""
+    log_p, log_rain = np.log(p_grid), np.log(sites.rain)
+
+    def loss(log_s: float) -> float:
+        c = np.interp(log_rain - log_s, log_p, model_ceiling, left=0.0, right=model_ceiling[-1])
+        return pinball(sites.woody - c, q)
+
+    return loss
 
 
 def fit_rainfall_scale(
@@ -116,13 +142,19 @@ def fit_rainfall_scale(
     many kinks, so S is found by search rather than by a local optimizer: over every S from 1 to
     20000 in steps of 0.1 percent, then in steps of 0.001 percent around the best.
     """
-    log_p, log_rain = np.log(p_grid), np.log(sites.rain)
-
-    def loss(log_s: float) -> float:
-        c = np.interp(log_rain - log_s, log_p, model_ceiling, left=0.0, right=model_ceiling[-1])
-        return pinball(sites.woody - c, q)
-
+    loss = _scale_loss(p_grid, model_ceiling, sites, q)
     coarse = np.arange(0.0, np.log(20000.0), SCALE_STEP)
     best = coarse[int(np.argmin([loss(s) for s in coarse]))]
     fine = np.linspace(best - SCALE_STEP, best + SCALE_STEP, 201)
     return float(np.exp(fine[int(np.argmin([loss(s) for s in fine]))]))
+
+
+def rainfall_scale_range(
+    p_grid: Array, model_ceiling: Array, sites: Sites, q: float = QUANTILE, within: float = 0.01
+) -> tuple[float, float]:
+    """The scales whose loss is within a fraction of the best: how tightly the data fix S."""
+    loss = _scale_loss(p_grid, model_ceiling, sites, q)
+    best = np.log(fit_rainfall_scale(p_grid, model_ceiling, sites, q))
+    near = np.arange(best - 0.3, best + 0.3, SCALE_STEP)  # 26 percent below to 35 above
+    kept = near[np.array([loss(s) for s in near]) <= (1.0 + within) * loss(best)]
+    return float(np.exp(kept.min())), float(np.exp(kept.max()))
